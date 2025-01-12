@@ -1,12 +1,19 @@
 import * as cheerio from "cheerio";
-import { stringify } from "csv-stringify";
+import { convertArrayToCSV } from "convert-array-to-csv";
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { spawn } from "child_process";
 import { codes } from "./codes.js";
 
-async function csv() {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+async function generateCSV() {
   let allData = [];
 
-  for (const code of codes) {
+  for (let i = 0; i < codes.length; i++) {
+    let code = codes[i];
     try {
       const url = `https://www.schools.nyc.gov/schools/${code}`;
       const res = await fetch(url);
@@ -26,27 +33,28 @@ async function csv() {
       const coordinatorNumber = coordinator.split(",");
 
       let i;
-      for (i = 0; i < coordinatorNumber.length; i++) {
-        const data = [];
+      for (i = 0; i <= coordinatorNumber.length; i++) {
+        let data = [];
 
         const addressGet = $('a[href^="https://maps.google.com/"]')
           .text()
           .split("  ");
         const address = addressGet[0];
-        data.push({ name: "Address", value: address });
+        data.push(address);
 
         const gradesGet = $('div.box span:contains("Grades:")')
           .text()
           .split(": ");
         const grades = gradesGet[1];
-        data.push({ name: "Grades", value: grades });
+        data.push(grades);
 
-        const phoneElement = $('span.visually-hidden:contains("Phone:")')
+        const phoneGet = $('span.visually-hidden:contains("Phone:")')
           .parent()
-          .find("span");
-        const phoneText = phoneElement.length ? phoneElement.text() : "";
-        const phone = phoneText.split(":");
-        data.push({ name: "School Phone", value: phone });
+          .find("span")
+          .text()
+          .split(":");
+        const phone = phoneGet[1];
+        data.push(phone);
 
         const principal = $(
           `div.box div.accordion div#accordion-panel-02 dl dt:contains(School Leader)`
@@ -54,20 +62,21 @@ async function csv() {
           .next()
           .text()
           .trim();
-        data.push({ name: "School Principal", value: principal });
+        data.push(principal);
 
         const website = $("li svg.icon-globe")
           .closest("li")
           .find("a")
           .attr("href");
-        data.push({ name: "School Website", value: website });
-
-        data.push({
-          name: "School Parent Coordinator/Field Counsel Name",
-          value: coordinator[i],
-        });
+        if (website) {
+          data.push(website);
+        } else {
+          data.push("N/A");
+        }
 
         if (coordinatorNumber.length > 1) {
+          data.push(coordinatorNumber[i]);
+
           const emailElement = $(
             `div.box div.accordion div#accordion-panel-02 dl dt:contains(Parent Coordinator)`
           )
@@ -80,7 +89,7 @@ async function csv() {
             let email;
             if (emailGet.length > 1) {
               email = emailGet[1].split(",");
-              data.push({ name: "SFC Email", value: email[i] });
+              data.push(email[i]);
             } else {
               console.warn(
                 `No valid email found in the href attribute for code ${code}`
@@ -89,7 +98,9 @@ async function csv() {
           } else {
             console.warn(`Email link not found for code ${code}`);
           }
-        } else {
+        } else if (coordinatorNumber === 1) {
+          data.push(coordinatorNumber);
+
           const emailElement = $(
             `div.box div.accordion div#accordion-panel-02 dl dt:contains(Parent Coordinator)`
           )
@@ -99,20 +110,14 @@ async function csv() {
 
           if (href) {
             const emailGet = href.split(":");
-            let email;
-            if (emailGet.length > 1) {
-              email = emailGet[1];
-              data.push({ name: "SFC Email", value: email });
-            } else {
-              console.warn(
-                `No valid email found in the href attribute for code ${code}`
-              );
-            }
+            email = emailGet[1];
+            data.push(email);
           } else {
-            console.warn(`Email link not found for code ${code}`);
+            data.push("N/A");
           }
-
-          data.push({ name: "SFC Email", value: "" }); // Add an empty string as a placeholder
+        } else if (!coordinatorNumber) {
+          data.push("N/A");
+          data.push("N/A");
         }
         console.log(data);
         allData.push(data);
@@ -124,30 +129,47 @@ async function csv() {
   return allData;
 }
 
-await csv();
+const rows = [
+  "Address",
+  "Grades",
+  "School Phone",
+  "School Principal",
+  "School Website",
+  "School Parent Coordinator/Field Counsel Name",
+  "SFC Email",
+];
 
-async function writeToCSV(data) {
-  const writer = stringify({
-    header: true,
-    rowDelimiter: "\n",
-  });
+async function createAndOpenCSV() {
+  try {
+    const data = await generateCSV();
 
-  const stream = fs.createWriteStream("output.csv");
+    // Transform the data into the correct format
+    const formattedData = data.map((row) => {
+      return Object.values(row).map((value) => JSON.stringify(value));
+    });
 
-  writer.on("readable", () => {
-    let record;
-    while ((record = writer.read()) !== null) {
-      stream.write(record);
-    }
-  });
+    const csvFromArrayOfArrays = convertArrayToCSV(formattedData, {
+      rows: [rows],
+      separator: ",",
+      includeEmptyRows: false,
+      quoteStrings: true,
+    });
 
-  await new Promise((resolve, reject) => {
-    writer.on("finish", resolve);
-    writer.on("error", reject);
-  });
+    const filePath = path.join(__dirname, "output.csv");
+    fs.writeFileSync(filePath, csvFromArrayOfArrays);
 
-  stream.end();
+    // Open the file in VS Code
+    const child = spawn("code.cmd", [filePath], { shell: true });
+    child.on("exit", (code) => {
+      if (code !== 0) {
+        console.error(`Child process exited with code ${code}`);
+      } else {
+        console.log("File opened successfully in VS Code");
+      }
+    });
+  } catch (error) {
+    console.error("Error creating CSV:", error);
+  }
 }
 
-// Call this function after csv()
-writeToCSV(await csv());
+createAndOpenCSV().catch(console.error);

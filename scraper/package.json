@@ -1,8 +1,7 @@
 {
   "name": "scraper",
   "version": "1.0.0",
-  "main": "index.js",
-  "type": "module",
+  "main": "index.html",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -12,6 +11,9 @@
   "description": "",
   "dependencies": {
     "cheerio": "^1.0.0",
-    "csv-stringify": "^6.5.2"
+    "convert-array-to-csv": "^2.0.0",
+    "csv-stringify": "^6.5.2",
+    "opener": "^1.5.2",
+    "scraper": "file:"
   }
 }
