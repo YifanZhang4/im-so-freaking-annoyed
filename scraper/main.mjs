@@ -33,7 +33,7 @@ async function generateCSV() {
       const coordinatorNumber = coordinator.split(",");
 
       let i;
-      for (i = 0; i <= coordinatorNumber.length; i++) {
+      for (i = 0; i <= coordinatorNumber.length - 1; i++) {
         let data = [];
 
         const addressGet = $('a[href^="https://maps.google.com/"]')
@@ -74,51 +74,29 @@ async function generateCSV() {
           data.push("N/A");
         }
 
-        if (coordinatorNumber.length > 1) {
-          data.push(coordinatorNumber[i]);
+        data.push(coordinatorNumber[i]);
 
-          const emailElement = $(
-            `div.box div.accordion div#accordion-panel-02 dl dt:contains(Parent Coordinator)`
-          )
-            .next()
-            .find("a");
-          const href = emailElement.attr("href");
+        const emailElement = $(
+          `div.box div.accordion div#accordion-panel-02 dl dt:contains(Parent Coordinator)`
+        )
+          .next()
+          .find("a");
+        const href = emailElement.attr("href");
 
-          if (href) {
-            const emailGet = href.split(":");
-            let email;
-            if (emailGet.length > 1) {
-              email = emailGet[1].split(",");
-              data.push(email[i]);
-            } else {
-              console.warn(
-                `No valid email found in the href attribute for code ${code}`
-              );
-            }
+        if (href) {
+          const emailGet = href.split(":");
+          let email;
+          if (emailGet.length > 1) {
+            email = emailGet[1].split(",");
+            data.push(email[i]);
           } else {
-            console.warn(`Email link not found for code ${code}`);
-          }
-        } else if (coordinatorNumber === 1) {
-          data.push(coordinatorNumber);
-
-          const emailElement = $(
-            `div.box div.accordion div#accordion-panel-02 dl dt:contains(Parent Coordinator)`
-          )
-            .next()
-            .find("a");
-          const href = emailElement.attr("href");
-
-          if (href) {
-            const emailGet = href.split(":");
-            email = emailGet[1];
+            email = emailGet;
             data.push(email);
-          } else {
-            data.push("N/A");
           }
-        } else if (!coordinatorNumber) {
-          data.push("N/A");
-          data.push("N/A");
+        } else {
+          console.warn(`Email link not found for code ${code}`);
         }
+
         console.log(data);
         allData.push(data);
       }
